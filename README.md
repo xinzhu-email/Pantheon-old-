@@ -1,3 +1,3 @@
 # Pantheon
-Graphical interface of single cell analysis. 
-use command: bokeh serve --show try_server.py
+Graphical interface of single cell analysis. <br>
+Use command: bokeh serve --show try_server.py
