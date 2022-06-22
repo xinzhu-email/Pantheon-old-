@@ -1,6 +1,6 @@
-from unicodedata import name
+from cProfile import label
 from bokeh.io import show
-from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs
+from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup
 from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect
 from bokeh.events import ButtonClick
 from bokeh.transform import linear_cmap
@@ -12,18 +12,22 @@ from bokeh.plotting import figure
 from numpy.random import random
 import pandas
 import numpy as np
-
-
-
-data_path = "E:/项目/图形化界面/ADT_gater-master/"
+import anndata
+from sklearn import metrics
+import pandas as pd
+import scipy.sparse as ss
 
 # Loading data
-data_array = []
-data_array.append(pandas.read_csv(data_path+'ADT.csv'))
-data_df = pandas.concat(data_array,axis=1,join='inner')
+#data_path = "E:/项目/图形化界面/ADT_gater-master/"
+data_path = 'CD4_memory_Naive.h5ad'
+adata = anndata.read(data_path)
+#data_array = []
+#data_array.append(pandas.read_csv(data_path+'ADT.csv'))
+#data_df = pandas.concat(data_array,axis=1,join='inner')
 #print(data)
+data_df = adata.to_df()
 generic_columns = data_df.columns.values.tolist()[1:]
-print(generic_columns)
+#print(generic_columns)
 # Initialize color attribute
 data_df['color'] = pandas.Series(np.full(data_df.shape[0], 0).astype(str), index=data_df.index)
 # Initialize highly variable gene
@@ -53,7 +57,7 @@ def color_func():
 
     for i in source.selected.indices:
         c_list[i] =  cur_color
-    print(c_list)
+    print('chosen color:',c_list)
     source.data["color"] = c_list
     data_df["color"] = c_list
 
@@ -115,11 +119,12 @@ class FlowPlot:
 
     def refresh(self):
         global cur_color
-        print(self.r.selection_glyph.fill_color)
+        print('color list of data: ',self.r.selection_glyph.fill_color)
         self.r.selection_glyph.fill_color = color_list[cur_color]
     
     def show_choosed(self,cate_name,class_name):
-        self.r.data_source.selected.indices = data_df[data_df[cate_name]==class_name].index.tolist()
+        
+        #self.r.data_source.selected.indices = adata.uns[cate_name][adata.uns[cate_name]['class_name']==class_name].tolist()
         self.r.selection_glyph.line_color = 'black'
 
 
@@ -133,10 +138,15 @@ Figure = FlowPlot(opts, source, view, generic_columns, color_map, "Surface Marke
 # Change the color of selected parts
 cur_color = color_list[0]
 select_color = Select(title="Select color:", options=list(str(i) for i in range(20)), value=str(0))
-#select_color = Select(title="Select color:",options=list(color_list),value = color_list[0])
-#select_color = ColorPicker(title="Select color:", color=color_list[1], css_classes=color_list)
 select_color.on_change("value", select_color_func)
 
+"""def select_clr_func(attr, old, new):
+    global select_color, cur_color, Figure, source
+    cur_color = select_color.color
+    Figure.refresh()#in this function: change "self.r.selection_glyph.fill_color = color_list[cur_color]" to "self.r.selection_glyph.fill_color=cur_color"
+    source.data["color"] = source.data["color"]
+select_color = ColorPicker(title="Select color:", color=color_list[1], css_classes=color_list)
+select_color.on_change("color", select_clr_func)"""
 
 color_button = Button(label="Color")
 color_button.on_click(color_func)
@@ -159,12 +169,12 @@ showall_button.on_click(showall_func)
 # New Category
 category_options = {}
 def new_category():
-    global data_df, category_options, cat_opt, category_options
-    data_df[name.value] = pandas.Series(np.full(data_df.shape[0], 0), index=data_df.index)
+    global adata, category_options, cat_opt, category_options
+    adata.uns[name.value] =  pandas.DataFrame(index=range(data_df.shape[0]), columns=['class_name','color'],dtype=object)
     category_options[name.value] = []
     cat_opt.options = list(category_options.keys())
     cat_opt.value = cat_opt.options[0]
-    print(data_df)
+    print(adata.uns[name.value])
     curdoc().remove_root(class_func)
     curdoc().remove_root(delclass_panels)
     curdoc().add_root(class_func)
@@ -174,26 +184,26 @@ def new_category():
 # Edit category
 def edit_category():
     
-    global cat_opt, data_df, category_options
+    global cat_opt, adata, category_options
     old_name = cat_opt.value
     new_name = name.value
-    data_df.rename(columns={old_name: new_name},inplace=True)
+    adata.uns[new_name] = adata.uns.pop(old_name)
     category_options[new_name] = category_options.pop(old_name)
     cat_opt.options = list(category_options.keys())
     cat_opt.value = cat_opt.options[0]
-    print(data_df)
+    print(adata.uns[new_name])
 
 # Delete category
 def del_category():
-    global cat_opt, category_options, data_df
+    global cat_opt, category_options, adata
     del category_options[cat_opt.value]
-    del data_df[cat_opt.value]   
+    del adata.uns[cat_opt.value]   
     cat_opt.options = list(category_options.keys())
     if len(cat_opt.options) == 0:
         cat_opt.value = "No Category"
     else:
         cat_opt.value = cat_opt.options[0]
-    print(data_df)
+    
     
 
 def catfunc_cb(attr,old,new):
@@ -241,32 +251,53 @@ cat_opt.on_change("value", choose_cat)
 
 new_catboard = column(cat_func,row(cat_opt,name),save_button)
 
+def class_change():
+    choosed_list = class_checkbox.active
+    
+
+
+cls_label = []
+class_checkbox = CheckboxGroup(labels=cls_label,active=[0,1])
+class_checkbox.js_on_click(CustomJS(code="""
+    console.log('checkbox_group: active=' + this.active, this.toString())
+"""))
 # New Class
 def add_entry():
+    global cls_label
     category_options[cat_opt.value] = list(category_options.get(cat_opt.value,[]) + [text_input.value])
     #class_options.append(text_input.value)
     class_select.options = category_options[cat_opt.value]
     class_select.value = text_input.value
+    
     save_class(cat_opt.value, text_input.value)
     text_input.value = ''
     print(f'\n{class_select.options}\n')
 
 def save_class(category_name, class_name):
-    global data_df
-    class_list = data_df[category_name]
-
+    global adata, class_checkbox, cls_label
+    class_list = adata.uns[category_name]['class_name']
+    color_l = adata.uns[category_name]['color']
     for i in source.selected.indices:
         class_list[i] =  class_name
-    data_df[category_name] = class_list
-    print(data_df)
+        color_l[i] = cur_color
+    adata.uns[category_name]['class_name'] = class_list
+    adata.uns[category_name]['color'] = color_l
+    cls_label = list(category_options[category_name])
+    for i in range(len(cls_label)):
+        ind = adata.uns[category_name][adata.uns[category_name]['class_name'] == category_options[category_name][i]]
+        cls_label[i] = cls_label[i] + ': color=' + str(ind['color'].values[0]) + ', cell_nums='+ str(len(ind))
+    class_checkbox.labels = cls_label
+    curdoc().remove_root(class_checkbox)
+    curdoc().add_root(class_checkbox)
+    print(adata.uns[category_name])
 
 # Delete Class
 def del_class():
-    global data_df, class_select, category_options
+    global adata, class_select, category_options
     cate_name = cat_opt.value
     class_name = class_select.value
     print('class_name',class_name)
-    data_df[cate_name][data_df[cate_name]==class_name] = 0
+    adata.uns[cate_name][adata.uns[cate_name]['class_name']==class_name] = np.NAN
 
     del_list = list(category_options[cate_name])
     del_list.remove(class_name)
@@ -274,11 +305,11 @@ def del_class():
     category_options[cate_name] = del_list
 
     class_select.options = category_options[cate_name]
-    print(data_df)
+    print(adata.uns[cate_name])
     
 
     
-# CLass Function
+# Class Function
 def clsfunc_cb(attr,old,new):
     global class_button
     if class_func.value == 'Create New Class':
@@ -335,7 +366,7 @@ class_select.on_change("value",show_category)
 
 
 def function_callback(attr, old, new):
-    global layout,data_df
+    global layout, adata
     func_list = function_select.value
 
     for i in range(len(func_list)):
@@ -361,13 +392,16 @@ def addpanel(event):
 add_panel = Button(label='Add Panel')
 add_panel.on_event(ButtonClick,addpanel)
 
-control_panel = column(select_color, row(color_button, correct_button), gate_button, remove_button, showall_button,function_select,add_panel)
-figure_panel = column(Figure.p, Figure.s_x, Figure.s_y)
+control_panel = column(Figure.s_x, Figure.s_y,select_color, row(color_button, correct_button), gate_button, remove_button, showall_button,new_catboard,add_panel)
+figure_panel = column(Figure.p)
 layout = row(figure_panel,control_panel)
 
 panle1 = Panel(child=layout,title='Original Panel')
 tab_list = [panle1]
 
 tabs = Tabs(tabs=tab_list)
+
+
+
 
 curdoc().add_root(tabs)
