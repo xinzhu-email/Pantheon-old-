@@ -1,4 +1,3 @@
-from cProfile import label
 from bokeh.io import show
 from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup
 from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect
@@ -11,7 +10,6 @@ from bokeh.plotting import figure
 import pandas
 import numpy as np
 import anndata
-import pandas as pd
 import scipy.sparse as ss
 
 # Loading data
