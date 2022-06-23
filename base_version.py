@@ -1,4 +1,3 @@
-from cProfile import label
 from bokeh.io import show
 from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup
 from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect
@@ -12,6 +11,7 @@ import pandas
 import numpy as np
 import anndata
 import scipy.sparse as ss
+import scanpy as sc
 
 # Loading data
 #data_path = "E:/项目/图形化界面/ADT_gater-master/"
@@ -22,12 +22,14 @@ adata = anndata.read(data_path)
 #data_df = pandas.concat(data_array,axis=1,join='inner')
 data_df = adata.to_df()
 generic_columns = data_df.columns.values.tolist()
+data_log = np.log1p(data_df)
 #print(generic_columns)
 # Initialize color attribute
 data_df['color'] = pandas.Series(d3['Category20c'][20][0], index=data_df.index)
 # Initialize highly variable gene
 data_df['hl_gene'] = pandas.Series(np.full(data_df.shape[0], 0), index=data_df.index)
 color_list = d3['Category20c'][20]
+
 
 ##############################
 ##### Function Definition ####
@@ -60,6 +62,16 @@ def correct_func():
     global source
     source.selected.indices = []
 
+# Log
+def log_cb(attr, old, new):
+    global Figure
+    data_log['color'] = data_df['color']
+    if log_select.value == 'Raw data':
+        Figure.source.data = data_df
+    else:
+        Figure.source.data = data_log
+
+
 # Show all, gate, and remove function
 def showall_func():
     global view
@@ -83,19 +95,18 @@ def save_profile():
     label = adata.uns[cat_opt.value]['class_name']
     label.to_csv('./RESULT__%s.csv'%cat_opt.value)
 
+##########################
 ### Category Functions ###
-
+##########################
 # New Category
 def new_category():
     global adata, category_options, cat_opt, category_options
     adata.uns[name.value] =  pandas.DataFrame(index=range(data_df.shape[0]), columns=['class_name','color'],dtype=object)
-    adata.uns[name.value]['color'] = color_list[0]
+    adata.uns[name.value]['color'] = color_list[19]
     category_options[name.value] = []
     cat_opt.options = list(category_options.keys())
     cat_opt.value = cat_opt.options[0]
     print(adata.uns[name.value])
-
-
 
 # Edit category
 def edit_category():   
@@ -127,9 +138,10 @@ def choose_cat(attr,old,new):
         cate = cat_opt.value
         for cls in list(category_options[cate]):
             l = adata.uns[cate][adata.uns[cate]['class_name'] == cls]
-            s = cls + [cls + ': color=' + str(l['color'].values[0]) + ', cell_nums='+ str(l.shape[0])]
+            s = cls + ': color=' + str(l['color'].values[0]) + ', cell_nums='+ str(l.shape[0])
             cls_label = np.append(cls_label,s)
-        class_checkbox.labels = cls_label
+        class_checkbox.labels = list(cls_label)
+        class_checkbox.active = []
         source.data['color'] = adata.uns[cate]['color']
 
 # Callback of function selection about category
@@ -176,9 +188,9 @@ def save_cb():
         del_category()
         curdoc().add_root(cat_opt)
 
-
-
-
+########################
+#### Class Function ####
+########################
 # New Class
 def add_entry():
     global cls_label
@@ -188,7 +200,7 @@ def add_entry():
 
 # Merge checked classes
 def merge_class(toclass,color):
-    global category_options,class_checkbox,class_select
+    global category_options,class_checkbox
     checked_class = []
     for i in class_checkbox.active:
         checked_class = np.append(checked_class,category_options[cat_opt.value][i])
@@ -204,9 +216,10 @@ def merge_class(toclass,color):
         del del_list2[class_checkbox.active[i]-i]
     del category_options[cat_opt.value]    
     category_options[cat_opt.value] = del_list + [toclass]
-    #class_select.options = category_options[cat_opt.value]
     del_list2 = del_list2 + [toclass+ ': color=' + str(color) + ', cell_nums='+ str(len(adata.uns[cat_opt.value][l]))]
     class_checkbox.labels = del_list2
+    class_checkbox.active = []
+
 
 # Save change of classes
 def save_class(category_name, class_name):
@@ -233,7 +246,7 @@ def del_class():
     checked_class = []
     for i in class_checkbox.active:
         checked_class = np.append(checked_class,category_options[cat_opt.value][i])
-    adata.uns[cat_opt.value][adata.uns[cat_opt.value]['class_name'].isin(list(checked_class))] = np.NAN
+    adata.uns[cat_opt.value][adata.uns[cat_opt.value]['class_name'].isin(list(checked_class))] = [np.NAN,color_list[19]]
     del_list = list(category_options[cat_opt.value])
     del_list2 = class_checkbox.labels
     for i in range(len(checked_class)):
@@ -401,12 +414,16 @@ showall_button.on_click(showall_func)
 save_label = Button(label='Save profiles')
 save_label.on_click(save_profile)
 
+# Log
+log_select = Select(title='Log or not',options=['Raw data','Log data'],value='Raw data')
+log_select.on_change('value',log_cb)
+
 
 # Show color of category
 show_color_button = Button(label='Show Color of Category')
 show_color_button.on_click(show_color)
 
-
+##################################
 ### Category Functions Buttons ###
 category_options = {} #A DICT to save name of Categories and the name of classes belong to each Category
 
@@ -428,10 +445,10 @@ save_button.on_click(save_cb)
 cat_opt = Select(title='Select Category', options=['No Category'], value='No Category')
 cat_opt.on_change("value", choose_cat)
 
-
+##############################
 ### Class Functions Button ###
 # Select Function of Class
-class_func = Select(title='Select Class Function',options=['Create New Class','Edit Class','Delete Selected Class','Change Category Name'],value='Create New Class')
+class_func = Select(title='Select Class Function',options=['Create New Class','Edit Class','Delete Selected Class'],value='Create New Class')
 class_func.on_change("value",clsfunc_cb)
 
 # Input of class name
@@ -446,7 +463,7 @@ class_checkbox.js_on_click(CustomJS(code="""
 #class_select = Select(title = 'Choose Class: ', options = ['Choose Class'], value='Choose Class')
 
 # Selection of editing classes
-edit_classes = Select(title='Classes function',options=['Merge checked classes','Gate checked classes'], value='Merge checked classes')
+edit_classes = Select(title='Edit Function:',options=['Merge checked classes','Gate checked classes'], value='Merge checked classes')
 edit_classes.on_change('value',cls_func_change)
 
 # Save button of class
@@ -466,7 +483,7 @@ add_panel.on_event(ButtonClick,addpanel)
 
 ### Layout ###
 figure_panel = column(Figure.p)
-control_panel = column(Figure.s_x, Figure.s_y, select_color, gate_button, remove_button, showall_button,save_label, cat_func, name, save_button)
+control_panel = column(Figure.s_x, Figure.s_y, select_color, log_select, gate_button, remove_button, showall_button,save_label, cat_func, name, save_button)
 layout = row(figure_panel,control_panel)
 
 # Panel
