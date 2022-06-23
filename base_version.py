@@ -1,3 +1,4 @@
+from cProfile import label
 from bokeh.io import show
 from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup
 from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect
@@ -77,6 +78,10 @@ def remove_func():
     remain_indices = [x for x in view.filters[0].indices if x not in source.selected.indices]
     view.filters = [IndexFilter(remain_indices)]
 
+def save_profile():
+    adata.write('./RESULT__%s'%data_path)
+    label = adata.uns[cat_opt.value]['class_name']
+    label.to_csv('./RESULT__%s.csv'%cat_opt.value)
 
 ### Category Functions ###
 
@@ -392,6 +397,11 @@ remove_button.on_click(remove_func)
 showall_button = Button(label="Show All")
 showall_button.on_click(showall_func)
 
+# Save labels
+save_label = Button(label='Save profiles')
+save_label.on_click(save_profile)
+
+
 # Show color of category
 show_color_button = Button(label='Show Color of Category')
 show_color_button.on_click(show_color)
@@ -456,7 +466,7 @@ add_panel.on_event(ButtonClick,addpanel)
 
 ### Layout ###
 figure_panel = column(Figure.p)
-control_panel = column(Figure.s_x, Figure.s_y, select_color, gate_button, remove_button, showall_button, cat_func, name, save_button)
+control_panel = column(Figure.s_x, Figure.s_y, select_color, gate_button, remove_button, showall_button,save_label, cat_func, name, save_button)
 layout = row(figure_panel,control_panel)
 
 # Panel
