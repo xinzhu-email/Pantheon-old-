@@ -75,7 +75,7 @@ def log_cb(attr, old, new):
 # Show all, gate, and remove function
 def showall_func():
     global view
-    view.filters = []
+    view.filters = list([])
 
 def selection_func():
     global view
@@ -86,7 +86,7 @@ def remove_func():
     global view, source
     remove_set = set(source.selected.indices)
     if len(view.filters) == 0:
-        view.filters = [IndexFilter(range(source.data.shape[0]))]
+        view.filters = [IndexFilter(np.object_(range(data_df.shape[0])))]
     remain_indices = [x for x in view.filters[0].indices if x not in source.selected.indices]
     view.filters = [IndexFilter(remain_indices)]
 
@@ -195,7 +195,7 @@ def save_cb():
 def add_entry():
     global cls_label
     category_options[cat_opt.value] = list(category_options.get(cat_opt.value,[]) + [input_t.value])
-    save_class(cat_opt.value, input_t.value)
+    save_class(cat_opt.value, input_t.value, cur_color, 0)
     input_t.value = ''
 
 # Merge checked classes
@@ -222,20 +222,23 @@ def merge_class(toclass,color):
 
 
 # Save change of classes
-def save_class(category_name, class_name):
+def save_class(category_name, class_name, color, n):
     global adata, class_checkbox, cls_label
     class_list = adata.uns[category_name]['class_name']
     color_l = adata.uns[category_name]['color']
-    num = 0
+    num = n
     for i in source.selected.indices:
         class_list[i] =  class_name
-        color_l[i] = cur_color
+        color_l[i] = color
         num = num + 1
     adata.uns[category_name]['class_name'] = class_list
     adata.uns[category_name]['color'] = color_l
-    cls_label = class_checkbox.labels
-    cls_label = cls_label + [class_name + ': color=' + str(cur_color) + ', cell_nums='+ str(num)]
-    class_checkbox.labels = cls_label
+    if n == 0:
+        cls_label = class_checkbox.labels
+        cls_label = cls_label + [class_name + ': color=' + str(color) + ', cell_nums=' + str(num)]
+        class_checkbox.labels = cls_label
+    else:
+        class_checkbox.labels[class_checkbox.active[0]] = class_name + ': color=' + str(color) + ', cell_nums=' + str(num)
     curdoc().remove_root(class_checkbox)
     curdoc().add_root(class_checkbox)
     print(adata.uns[category_name])
@@ -278,6 +281,9 @@ def cls_func_change(attr,old,new):
     elif edit_classes.value == 'Gate checked classes':
         class_button.label = 'Gate checked classes'
         curdoc().add_root(class_button)
+    elif edit_classes.value == 'Add dots to the class':
+        class_button.label = 'Add selected dots to the checked class'
+        curdoc().add_root(class_button)
 
 # Callback of Class Function Change 
 def clsfunc_cb(attr,old,new):
@@ -310,6 +316,11 @@ def save_cls_button(event):
             merge_class(toclass,color)
         elif edit_classes.value == 'Gate checked classes':
             gate_class()
+        elif edit_classes.value == 'Add dots to the class':
+            class_name = category_options[cat_opt.value][class_checkbox.active[0]]
+            l = adata.uns[cat_opt.value][adata.uns[cat_opt.value]['class_name']==class_name]
+            color = l['color'][0]
+            save_class(cat_opt.value, class_name,color,len(l))
     elif class_func.value == 'Delete Selected Class':
         del_class()
 
@@ -463,7 +474,7 @@ class_checkbox.js_on_click(CustomJS(code="""
 #class_select = Select(title = 'Choose Class: ', options = ['Choose Class'], value='Choose Class')
 
 # Selection of editing classes
-edit_classes = Select(title='Edit Function:',options=['Merge checked classes','Gate checked classes'], value='Merge checked classes')
+edit_classes = Select(title='Edit Function:',options=['Merge checked classes','Gate checked classes','Add dots to the class'], value='Merge checked classes')
 edit_classes.on_change('value',cls_func_change)
 
 # Save button of class
