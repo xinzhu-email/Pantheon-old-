@@ -68,13 +68,13 @@ def correct_func():
 
 # Log
 def log_cb(attr, old, new):
-    global Figure
+    global source
     if log_select.value == 'Raw data':
-        data_df['color'] = data_log['color']
-        Figure.source.data = data_df
+        data_df['color'] = source.data['color']
+        source.data = data_df
     else:
-        data_log['color'] = data_df['color']
-        Figure.source.data = data_log
+        data_log['color'] = source.data['color']
+        source.data = data_log
 
     
 
@@ -340,7 +340,7 @@ def clsfunc_cb(attr,old,new):
         class_button.label =  'Confirm to Delete! (Please check the selected CLASS!!)'
 
 # Callback of class Save Button
-def save_cls_button(event):
+"""def save_cls_button(event):
     global save_button, cat_opt, Figure
     if class_func.value == 'Create New Class':
         add_entry()
@@ -360,8 +360,14 @@ def save_cls_button(event):
             print('===',l.shape[0],'==',np.object_(class_checkbox.active[0]),'==')
             save_class(cat_opt.value, class_name,color,len(l))
     elif class_func.value == 'Delete Selected Class':
-        del_class()
-
+        del_class()"""
+def save_cls_button(event):
+    class_name = adata.uns['category_dict'][cat_opt.value]['class_name'][class_checkbox.active[0]]
+    color = adata.uns['category_dict'][cat_opt.value]['color'][class_checkbox.active[0]]
+    print(adata.obs[cat_opt.value],str(class_checkbox.active[0]))
+    l = adata[adata.obs[cat_opt.value]==str(class_checkbox.active[0])]
+    print('===',l.shape[0],'==',np.object_(class_checkbox.active[0]),'==')
+    save_class(cat_opt.value, class_name,color,len(l))
 # Show color of category
 def show_color():
     col_list = source.data['color']
@@ -479,7 +485,7 @@ dot_class = Button(label='Show the class')
 dot_class.on_click(select_class)
 
 # Show color of category
-show_color_button = Button(label='Show Color of Category')
+show_color_button = Button(label='Show Color of Classes')
 show_color_button.on_click(show_color)
 
 ##################################
@@ -591,7 +597,7 @@ except:
 
 ### Layout ###
 figure_panel = column(Figure.p)
-control_panel = column(Figure.s_x, Figure.s_y, select_color, log_select, gate_button, remove_button, showall_button,save_label,dot_class)
+control_panel = column(Figure.s_x, Figure.s_y, select_color, log_select, gate_button, remove_button, showall_button,save_label,show_color_button,dot_class)
 class_panel = column(cate_panel, class_func,input_t,class_button,class_checkbox)
 layout = row(figure_panel,column(control_panel),class_panel)
 
