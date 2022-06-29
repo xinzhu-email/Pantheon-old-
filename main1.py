@@ -1,5 +1,3 @@
-from cProfile import label
-from bokeh.io import show
 from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup, FileInput
 from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect
 from bokeh.events import ButtonClick
@@ -8,18 +6,16 @@ from bokeh.layouts import row, column
 from bokeh.io import curdoc
 from bokeh.layouts import row
 from bokeh.plotting import figure
-from click import option
 import pandas
 import numpy as np
 import anndata
 import scipy.sparse as ss
 import scanpy as sc
-from torch import cat
 
 # Loading data
 #data_path = "E:/项目/图形化界面/ADT_gater-master/"
 #data_path = 'CD4_memory_Naive.h5ad'
-#adata = anndata.read(data_path)
+#adata = anndata.read('CD4_memory_Naive.h5ad')
 adata = anndata.read_csv('ADT.csv')
 #data_array = []
 #data_array.append(pandas.read_csv(data_path+'ADT.csv'))
@@ -49,7 +45,7 @@ try:
     upload_button.filename = "ADT.csv"
 except:
     d = Div(text="Please select file!")
-    curdoc().add_root(d)
+    #curdoc().add_root(d)
 upload_button.on_change('filename',eb)
 
 
@@ -105,8 +101,6 @@ def showall_func():
 def gate_func():
     global view
     view.filters = [IndexFilter(source.selected.indices)]
-    if len(class_checkbox.labels)==0:
-        new_category()
     
     #print(source.selected.indices)
 
@@ -156,15 +150,19 @@ def show_legend():
 ##########################
 # New Category
 def new_category():
-    global adata, cat_opt
-    marker = str(Figure.p.xaxis.axis_label) + '+' + str(Figure.p.yaxis.axis_label)
+    global adata, cat_opt, name
+    if name.value == '':
+        marker = str(Figure.p.xaxis.axis_label) + '+' + str(Figure.p.yaxis.axis_label)
+    else:
+        marker = name.value
     adata.uns['category_dict'][marker] = pandas.DataFrame(columns=['class_name','color','cell_num'])
     adata.obs[marker] = pandas.Series(index=data_df.index,dtype=object)
     #adata.uns[name.value] =  pandas.DataFrame(index=range(data_df.shape[0]), columns=['class_name','color'],dtype=object)
     #adata.uns[name.value]['color'] = color_list[19]
     #category_options[name.value] = []
-    cat_opt.options = [' '] + list(adata.uns['category_dict'].keys())
+    cat_opt.options = list(adata.uns['category_dict'].keys())
     cat_opt.value = marker
+    name.value = ''
 
 # Edit category
 def edit_category():   
@@ -173,8 +171,7 @@ def edit_category():
     new_name = name.value
     adata.obs[new_name] = adata.obs.pop(old_name)
     adata.uns['category_dict'][new_name] = adata.uns['category_dict'].pop(old_name)
-    #category_options[new_name] = category_options.pop(old_name)
-    cat_opt.options = list(adata.uns['category_name'].keys())
+    cat_opt.options = list(adata.uns['category_dict'].keys())
     cat_opt.value = cat_opt.options[0]
     print(adata.uns['category_dict'])
 
@@ -185,16 +182,14 @@ def del_category():
     del adata.obs[cat_opt.value]
     cat_opt.options = list(adata.uns['category_dict'].keys())
     if len(cat_opt.options) == 0:
-        cat_opt.value = "No Category"
+        cat_opt.value = ''
     else:
         cat_opt.value = cat_opt.options[0]
 
 # Choose Category
 def choose_cat(attr,old,new):
     global source
-    if cat_opt.value == ' ':
-        new_category()
-    elif class_checkbox.labels != []:
+    if True:
         cls_label = []
         cate = cat_opt.value
         for i in range(len(adata.uns['category_dict'][cate])):
@@ -204,7 +199,7 @@ def choose_cat(attr,old,new):
             s = str(class_name) + ': color=' + str(color) + ', cell_nums=' + str(cell_num)
             cls_label = np.append(cls_label,s)
         class_checkbox.labels = list(cls_label)
-        class_checkbox.active = []
+        class_checkbox.active = [0]
         show_color()
     else:
         class_checkbox.labels = []
@@ -218,7 +213,8 @@ def add_entry():
     global cls_label, adata
     xaxis = str(Figure.p.xaxis.axis_label)
     yaxis = str(Figure.p.yaxis.axis_label)
-    if cat_opt.value == ' ' or (str(cat_opt.value) != xaxis+'+'+yaxis and str(cat_opt.value) != yaxis+'+'+xaxis):
+    #if str(cat_opt.value) != xaxis+'+'+yaxis and str(cat_opt.value) != yaxis+'+'+xaxis:
+    if cat_opt.value == ' ':
         print(str(cat_opt.value),xaxis+'+'+yaxis)
         class_checkbox.labels = []
         new_category()       
@@ -362,7 +358,7 @@ def save_cls_button(event):
 def show_color():
     global source
     col_list = source.data['color']
-    print(adata.obs[cat_opt.value])
+    #print(adata.obs[cat_opt.value])
     for i in range(data_df.shape[0]):
         ind = adata.obs[cat_opt.value][i]
         #print(ind)
@@ -478,15 +474,26 @@ show_color_button.on_click(show_color)
 ### Category Functions Buttons ###
 
 # Marker
-cat_opt = Select(title='Marker of Groups:',options=[' '],value=' ')
+cat_opt = Select(title='Select View:',options=[' '],value=' ')
 cat_opt.on_change('value',choose_cat)
 
 # Input name of new category
-name = TextInput(title='Input Name: ', value=' ')
+name = TextInput(title='Input View Name: ', value='')
 name.js_on_change("value", CustomJS(code="""
     console.log('text_input: value=' + this.value, this.toString())
 """))
 
+# Create New Category
+new_view = Button(label='Create View')
+new_view.on_click(new_category)
+
+# Rename Category
+rename_view = Button(label='Rename View')
+rename_view.on_click(edit_category)
+
+# Delete Category
+del_view = Button(label='Delete View')
+del_view.on_click(del_category)
 
 # Select existed categories
 #cat_opt = Select(title='Select Category', options=['New Category'], value='New Category')
@@ -497,7 +504,7 @@ name.js_on_change("value", CustomJS(code="""
 
 
 # Input of class name
-input_t = TextInput(title='Input name: ',value='')
+input_t = TextInput(title='Input Cluster Name: ',value='')
 
 
     
@@ -524,7 +531,7 @@ rename_button = Button(label='Rename Cluster')
 rename_button.on_click(rename)
 
 # Add dots button
-add_dots = Button(label='Add dots')
+add_dots = Button(label='Add to Cluster')
 add_dots.on_event(ButtonClick,save_cls_button)
 
 # Merge Button
@@ -547,21 +554,23 @@ export_button.on_click(save_profile)
 
 
 def axis_cb(attr,old,new):
-    global Figure, data_df
+    global Figure, data_df, opts, source, view 
     if choose_panel.value != 'generic_columns':
         #print(adata.obsm[choose_panel.value])
-        data_df = pandas.DataFrame(data=adata.obsm[choose_panel.value],columns=['0','1'])
-        Figure.source = ColumnDataSource(data=data_df)     
-        Figure.s_x.options = list(str(i) for i in range(data_df.shape[1]))
-        Figure.s_y.options = list(str(i) for i in range(data_df.shape[1]))
-        Figure.s_x.value = '0'
-        Figure.s_y.value = '1'
-        Figure.source.data['color'] = pandas.Series(d3['Category20c'][20][0],index=data_df.index)
+        data_df = pandas.DataFrame(data=adata.obsm[choose_panel.value],columns=['0','1'],index=adata.obs.index)
+        color_define()
+        opts, source, view = define(data_df)
+        Figure.columns = list(str(i) for i in range(data_df.shape[1]))
     else:
-        Figure.s_x.options = generic_columns
-        Figure.s_y.options = generic_columns
-        Figure.s_x.value = generic_columns[0]
-        Figure.s_y.value = generic_columns[1]
+        data_df = adata.to_df()
+        color_define()
+        opts, source, view = define(data_df)
+        Figure.columns = generic_columns
+    Figure.source = source
+    Figure.view = view
+    Figure.s_x.options, Figure.s_y.options = Figure.columns, Figure.columns
+    Figure.r.view, Figure.r.source = view, source
+    show_color()
 
 # Read category
 try:
@@ -582,19 +591,19 @@ try:
     class_checkbox.labels = list(cls_label)
     class_checkbox.active = []
 except:
-    adata.uns['category_dict'] = dict({'New Category':pandas.DataFrame(columns=['class_name','color'])})
-    adata.obs['New Category'] = pandas.Series(index=data_df.index,dtype=object)
-    d = Div(text='No Existed Category! So Create New Category!')
+    d = Div(text='No Existed Clusters! ')
+    adata.uns['category_dict'] = dict()
     curdoc().add_root(d)
-    cate_panel = column(cat_opt)
+
 
 
 ### Layout ###
 file_panel = row(upload_button, export_button)
 figure_panel = column(Figure.p)
 control_panel = column(Figure.s_x, Figure.s_y, log_check, select_color, gate_button, remove_button, showall_button)
-class_panel = column(cat_opt, input_t, create_button, rename_button, change_clr_button, merge_button, del_button, add_dots, class_checkbox)
-layout = column(file_panel,row(figure_panel,column(control_panel),class_panel))
+class_panel = column(name,new_view,rename_view,del_view,cat_opt, input_t, create_button, add_dots, class_checkbox)
+edit_panel = column(rename_button, change_clr_button, merge_button, del_button)
+layout = column(file_panel,row(figure_panel,column(control_panel),class_panel,edit_panel))
 
 # Panel
 panle1 = Panel(child=layout,title='Original Panel')
