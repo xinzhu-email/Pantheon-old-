@@ -1,20 +1,21 @@
-from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup, FileInput
-from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect
+from bokeh.models import Slider, ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup, FileInput,FixedTicker, ColorBar, LogColorMapper
+from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect, AutocompleteInput
 from bokeh.events import ButtonClick
+from bokeh.transform import linear_cmap, log_cmap
 from bokeh.palettes import d3
 from bokeh.layouts import row, column
 from bokeh.io import curdoc
 from bokeh.layouts import row
 from bokeh.plotting import figure
+from matplotlib.pyplot import legend, text, title
 import pandas
 import numpy as np
 import anndata
 import scipy.sparse as ss
 import scanpy as sc
+import colorcet as cc
 
 # Loading data
-#data_path = "E:/项目/图形化界面/ADT_gater-master/"
-#data_path = 'CD4_memory_Naive.h5ad'
 #adata = anndata.read('CD4_memory_Naive.h5ad')
 adata = anndata.read_csv('ADT.csv')
 #data_array = []
@@ -56,6 +57,7 @@ def tag_func(selector, effector, attr, plot):
     axis = getattr(plot, attr + "axis")
     axis.axis_label = selector.value
     setattr(effector, attr, selector.value)
+
 
 # Callback of colorpicker(selection), update the selected dots with picked color
 def select_color_func(attr, old, new):
@@ -386,7 +388,7 @@ TOOLTIPS = [
 ]
 
 class FlowPlot:
-    def __init__(self, opts, source, view, columns, title = "", x_init_idx = 0, y_init_idx = 0, allow_select = True, select_color_change = False, legend = None):
+    def __init__(self, opts, source, view, columns, color_map, title = "", x_init_idx = 0, y_init_idx = 0, allow_select = True, select_color_change = False, legend = None):
         self.opts = opts
         self.source = source
         self.view = view
@@ -396,10 +398,10 @@ class FlowPlot:
         print("backend is ", self.p.output_backend)
         self.p.xaxis.axis_label = self.columns[x_init_idx]
         self.p.yaxis.axis_label = self.columns[y_init_idx]
-        self.r = self.p.circle(self.columns[x_init_idx], self.columns[y_init_idx],  source=self.source, view=self.view, fill_alpha=1,fill_color='color',line_color=None )
+        self.r = self.p.circle(self.columns[x_init_idx], self.columns[y_init_idx],  source=self.source, view=self.view, fill_alpha=1,fill_color=color_map,line_color=None )
         self.p.legend.click_policy="hide"
-        self.s_x = Select(title="x:", value=self.columns[x_init_idx], options=self.columns)
-        self.s_y = Select(title="y:", value=self.columns[y_init_idx], options=self.columns)
+        self.s_x = AutocompleteInput(title="x:", value=self.columns[x_init_idx], completions=self.columns,min_characters=1)
+        self.s_y = AutocompleteInput(title="y:", value=self.columns[y_init_idx], completions=self.columns,min_characters=1)
         # Attach reaction
         self.s_x.on_change("value", lambda attr, old, new: tag_func(self.s_x, self.r.glyph, 'x', self.p) )
         self.s_y.on_change("value", lambda attr, old, new: tag_func(self.s_y, self.r.glyph, 'y', self.p) )
@@ -433,12 +435,15 @@ def define(data_df):
     return opts, source, view
 
 opts, source, view = define(data_df)
-Figure = FlowPlot(opts, source, view, generic_columns, "Surface Marker Gating Panel", legend='color')
+Figure = FlowPlot(opts, source, view, generic_columns, 'color',"Surface Marker Gating Panel", legend='color')
 
 
 ##############################
 ##### Buttons Definition #####
 ##############################
+
+# Show gene list
+d_gene = Div(text='Gene/Marker List: '+str(generic_columns))
 
 # Log
 log_check = CheckboxGroup(labels=['Log axis'],active=[])
@@ -504,14 +509,15 @@ del_view.on_click(del_category)
 
 
 # Input of class name
-input_t = TextInput(title='Input Cluster Name: ',value='')
+input_t = TextInput(title='Input Cluster Name: ', value='')
 
 
     
 
 # Select of class (use checkbox)
 cls_label = [] # Checkbox label of class
-class_checkbox = CheckboxGroup(labels=cls_label,active=[0])
+class_checkbox = CheckboxGroup(labels=cls_label, active=[0], id="123123123")
+print(class_checkbox.id)
 class_checkbox.on_click(show_checked)
 #class_checkbox.js_on_click(CustomJS(code="""
 #    console.log('checkbox_group: active=' + this.active, this.toString())
@@ -555,21 +561,11 @@ export_button.on_click(save_profile)
 
 def axis_cb(attr,old,new):
     global Figure, data_df, opts, source, view 
-    if choose_panel.value != 'generic_columns':
-        #print(adata.obsm[choose_panel.value])
-        data_df = pandas.DataFrame(data=adata.obsm[choose_panel.value],columns=['0','1'],index=adata.obs.index)
-        color_define()
-        opts, source, view = define(data_df)
-        Figure.columns = list(str(i) for i in range(data_df.shape[1]))
-    else:
-        data_df = adata.to_df()
-        color_define()
-        opts, source, view = define(data_df)
-        Figure.columns = generic_columns
     Figure.source = source
     Figure.view = view
-    Figure.s_x.options, Figure.s_y.options = Figure.columns, Figure.columns
-    Figure.r.view, Figure.r.source = view, source
+    Figure.s_x.completions, Figure.s_y.completions = Figure.columns,Figure.columns
+    Figure.r.view = view
+    Figure.r.data_source = source
     show_color()
 
 # Read category
@@ -580,6 +576,13 @@ try:
     cate_panel = column(cat_opt)
     cls_label = []
     cate = cat_opt.value
+    views = list(adata.obsm.keys())
+    for view_name in views:
+        for i in range(adata.obsm[view_name].shape[1]):
+            data_df[view_name+str(i)] = pandas.Series(adata.obsm[view_name][:,i],index=data_df.index)
+            data_log[view_name+str(i)] = data_df[view_name+str(i)]
+    opts, source, view = define(data_df)
+    Figure.columns = list(data_df.columns)
     choose_panel = Select(title='Choose map:',value='generic_columns',options=list(adata.obsm.keys())+['generic_columns'])
     choose_panel.on_change('value',axis_cb)
     curdoc().add_root(choose_panel)
@@ -595,20 +598,50 @@ except:
     adata.uns['category_dict'] = dict()
     curdoc().add_root(d)
 
-
-
 ### Layout ###
 file_panel = row(upload_button, export_button)
-figure_panel = column(Figure.p)
+figure_panel = column(Figure.p,d_gene)
 control_panel = column(Figure.s_x, Figure.s_y, log_check, select_color, gate_button, remove_button, showall_button)
-class_panel = column(name,new_view,rename_view,del_view,cat_opt, input_t, create_button, add_dots, class_checkbox)
+class_panel = column(cat_opt,name,new_view,rename_view,del_view, input_t, create_button, add_dots, class_checkbox)
 edit_panel = column(rename_button, change_clr_button, merge_button, del_button)
 layout = column(file_panel,row(figure_panel,column(control_panel),class_panel,edit_panel))
 
+# Panel of highlight gene
+def show_colorbar():
+    global source
+    updated_color = source.data[hl_input.value]
+    source.data["hl_gene"] = updated_color
+    print(source.data['hl_gene'])
+
+def hl_filter():
+    global source, Figure
+    source.selected.indices = list(adata.obs[source.data[hl_input.value] > float(hl_filt_num.value)]['ind'])
+    Figure.r.selection_glyph = Circle(fill_alpha=1,fill_color='Black')
+
+hl_gene_map = log_cmap('hl_gene', cc.b_linear_blue_5_95_c73[::-1], low=1, high=100)
+hl_gene_plot = FlowPlot(opts, source, view, generic_columns, hl_gene_map, "Highlight Gene Viewing Window", select_color_change = False)
+hl_bar_map = LogColorMapper(palette=cc.b_linear_blue_5_95_c73[::-1], low=1, high=100)
+hl_gene_ticker = FixedTicker(ticks=[0,1,10,100])
+hl_color_bar = ColorBar(color_mapper=hl_bar_map, ticker=hl_gene_ticker, label_standoff=8, border_line_color=None, location=(0,0))
+hl_gene_plot.p.add_layout(hl_color_bar,'right')
+hl_input = AutocompleteInput(completions=generic_columns, title="Select Highlight Gene: ", min_characters=1)
+hl_button = Button(label="Show Highlight Gene")
+hl_button.on_click(show_colorbar)
+
+#hl_filt = Select(options=['>','=','<'],value='>')
+hl_filt_num = TextInput(title='Gene expression > :')
+hl_filt_button = Button(label='Filter')
+hl_filt_button.on_click(hl_filter)
+
+control_panel2 = column(hl_gene_plot.s_x,hl_gene_plot.s_y,hl_input,hl_button,hl_filt_num,hl_filt_button,log_check,select_color, gate_button, remove_button, showall_button)
+layout2 = row(hl_gene_plot.p,control_panel2,class_panel,edit_panel )
+
+
 # Panel
-panle1 = Panel(child=layout,title='Original Panel')
-tab_list = [panle1]
+panel1 = Panel(child=layout,title='Main View')
+panel2 = Panel(child=layout2,title='Highlight Gene')
+tab_list = [panel1,panel2]
 tabs = Tabs(tabs=tab_list)
 
 
-curdoc().add_root(layout)
+curdoc().add_root(tabs)
