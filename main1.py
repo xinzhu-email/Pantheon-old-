@@ -647,9 +647,9 @@ def hl_filter():
     source.selected.indices = list(adata.obs[source.data[hl_input.value] > float(hl_filt_num.value)]['ind'])
     Figure.r.selection_glyph = Circle(fill_alpha=1,fill_color='Black')
 
-hl_gene_map = log_cmap('hl_gene', cc.b_linear_blue_5_95_c73[::-1], low=1, high=100)
+hl_gene_map = log_cmap('hl_gene', cc.fire[::-1], low=1, high=100)
 hl_gene_plot = FlowPlot(opts, source, view, Figure.columns, hl_gene_map, "Highlight Gene Viewing Window", select_color_change = False)
-hl_bar_map = LogColorMapper(palette=cc.b_linear_blue_5_95_c73[::-1], low=1, high=100)
+hl_bar_map = LogColorMapper(palette=cc.fire[::-1], low=1, high=100)
 hl_gene_ticker = FixedTicker(ticks=[0,1,10,100])
 hl_color_bar = ColorBar(color_mapper=hl_bar_map, ticker=hl_gene_ticker, label_standoff=8, border_line_color=None, location=(0,0))
 hl_gene_plot.p.add_layout(hl_color_bar,'right')
