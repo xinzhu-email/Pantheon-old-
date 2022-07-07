@@ -13,7 +13,7 @@ import anndata
 import scipy.sparse as ss
 import scanpy as sc
 import colorcet as cc
-from torch import cat
+
 
 # Loading data
 #adata = anndata.read('CD4_memory_Naive.h5ad')
