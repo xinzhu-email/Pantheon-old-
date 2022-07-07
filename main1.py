@@ -714,9 +714,9 @@ def change_view(attr,old,new):
 def show_colorbar():
     global source1, Figure,hl_color_bar
     updated_color = source.data[hl_input.value]
-    #updated_color = (updated_color-hl_bar_map.low)/(hl_bar_map.high - hl_bar_map.low)
+    updated_color = (updated_color-min(updated_color))*(hl_bar_map.high - hl_bar_map.low)/(max(updated_color)-min(updated_color))
     source1.data["hl_gene"] = updated_color
-    print(source.data['hl_gene'])
+    print(source1.data['hl_gene'])
     
 
 def hl_filter():
