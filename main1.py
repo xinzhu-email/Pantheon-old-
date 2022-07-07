@@ -712,42 +712,34 @@ def change_view(attr,old,new):
     
 
 def show_colorbar():
-    global source, Figure,hl_color_bar
-    #hl_gene_plot.color_map = log_cmap('hl_gene', cc.kbc[::-1], low=1, high=max(source.data[hl_input.value]))
-    #hl_bar_map = LogColorMapper(palette=cc.kbc[::-1], low=1, high=max(source.data[hl_input.value]))
-    #hl_color_bar.color_mapper = hl_bar_map
-    #hl_color_bar.color_mapper.update(low = np.amin(source.data[hl_input.value]), high = np.amax(source.data[hl_input.value]))
-    hl_color_bar.update(color_mapper=LogColorMapper(palette=cc.kbc[::-1], low=1, high=10))
-    hl_color_bar.color_mapper.low = 1
-    hl_color_bar.color_mapper.high = 10
-    print(hl_color_bar.color_mapper.high)
-    #hl_gene_plot.p.add_layout(hl_color_bar,'left')
-    #new_r = hl_gene_plot.p.circle(Figure.s_x.value, Figure.s_y.value,  source=source, view=view, fill_alpha=1,fill_color=hl_gene_map,line_color=None )
+    global source1, Figure,hl_color_bar
     updated_color = source.data[hl_input.value]
-    source.data["hl_gene"] = updated_color
+    #updated_color = (updated_color-hl_bar_map.low)/(hl_bar_map.high - hl_bar_map.low)
+    source1.data["hl_gene"] = updated_color
     print(source.data['hl_gene'])
     
 
 def hl_filter():
-    global source, Figure
+    global source1, Figure
     if hl_filt.value == 'Gene Expression >':
-        source.selected.indices = list(adata.obs[source.data[hl_input.value] > float(hl_filt_num.value)]['ind'])
+        source1.selected.indices = list(adata.obs[source.data[hl_input.value] > float(hl_filt_num.value)]['ind'])
     elif hl_filt.value == 'Gene Expression <':
-        source.selected.indices = list(adata.obs[source.data[hl_input.value] < float(hl_filt_num.value)]['ind'])
+        source1.selected.indices = list(adata.obs[source.data[hl_input.value] < float(hl_filt_num.value)]['ind'])
     else:
-        source.selected.indices = list(adata.obs[source.data[hl_input.value] == float(hl_filt_num.value)]['ind'])
-    print(len(source.selected.indices))
+        source1.selected.indices = list(adata.obs[source.data[hl_input.value] == float(hl_filt_num.value)]['ind'])
+    print(len(source1.selected.indices))
     #new_r = show_colorbar()
     hl_gene_plot.r.selection_glyph = Circle(fill_alpha=1,fill_color='Black')
     #print(source.selected.indices)
 
 def change_select():
-    global new_r
-    new_r.visible = False
+    global source
+    source.selected.indices = source1.selected.indices
 
 
 hl_gene_map = log_cmap('hl_gene', cc.kbc[::-1], low=1, high=20)
-hl_gene_plot = FlowPlot(opts, source, view, Figure.columns, hl_gene_map, "Highlight Gene Viewing Window", select_color_change = False)
+source1 = ColumnDataSource(data=source.data)
+hl_gene_plot = FlowPlot(opts, source1, view, Figure.columns, hl_gene_map, "Highlight Gene Viewing Window", select_color_change = False)
 #hl_gene_plot.color_map = log_cmap('hl_gene', cc.kbc[::-1], low=0, high=40)
 hl_bar_map = LogColorMapper(palette=cc.kbc[::-1], low=1, high=20)
 hl_color_bar = ColorBar(color_mapper=hl_bar_map, label_standoff=8, border_line_color=None)
@@ -762,8 +754,10 @@ hl_filt_button = Button(label='Filter')
 hl_filt_button.on_click(hl_filter)
 hl_select = Button(label='Change Select')
 hl_select.on_click(change_select)
+hl_comfirm = Button(label='Change Selected')
+hl_comfirm.on_click(change_select)
 
-control_panel2 = column(hl_input,hl_button,row(hl_filt, hl_filt_num),hl_filt_button)
+control_panel2 = column(hl_input,hl_button,row(hl_filt, hl_filt_num),hl_filt_button,hl_comfirm)
 layout2 = row(hl_gene_plot.p, control_panel2)
 panel2 = Panel(child=layout2,title='Highlight Gene')
 
