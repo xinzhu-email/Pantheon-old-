@@ -13,6 +13,7 @@ import anndata
 import scipy.sparse as ss
 import scanpy as sc
 import colorcet as cc
+from torch import cat
 
 # Loading data
 #adata = anndata.read('CD4_memory_Naive.h5ad')
@@ -195,18 +196,7 @@ def choose_cat(attr,old,new):
     global source, class_checkbox
     try: 
         adata.uns['category_dict'][cat_opt.value]['class_name'][0]
-        cls_label = []
-        num = 0
-        cate = cat_opt.value
-        for i in range(len(adata.uns['category_dict'][cate])):
-            class_name = adata.uns['category_dict'][cate]['class_name'][i]
-            color = adata.uns['category_dict'][cate]['color'][i]
-            cell_num = adata.uns['category_dict'][cate]['cell_num'][i]
-            s = str(class_name) + ': color=' + str(color) + ', cell_nums=' + str(cell_num)
-            cls_label = np.append(cls_label,s)
-            num = num + cell_num
-        cls_label = np.append(cls_label,str('Unassigned: color=grey, cell_nums=' + str(data_df.shape[0]-num))) 
-        class_checkbox.labels = list(cls_label)
+        update_checkbox()
         class_checkbox.active = [0]
         show_color()
     except:
@@ -253,15 +243,7 @@ def save_class(cate, class_name, color, n):
     cate = cat_opt.value
     num = 0
     cls_label = [] 
-    for i in range(adata.uns['category_dict'][cate].shape[0]):
-        class_name = adata.uns['category_dict'][cate]['class_name'][i]
-        color = adata.uns['category_dict'][cate]['color'][i]
-        cell_num = len(data_df[adata.obs[cate]==str(i)])       
-        s = str(class_name) + ': color=' + str(color) + ', cell_nums=' + str(cell_num)
-        cls_label = np.append(cls_label,s)
-        num = num + cell_num
-    cls_label = np.append(cls_label,str('Unassigned: color=grey, cell_nums=' + str(data_df.shape[0]-num))) 
-    class_checkbox.labels = list(cls_label)
+    update_checkbox()
     class_checkbox.active = [ind]
     show_color()
     correct_func()
@@ -307,7 +289,7 @@ def merge_class():
     for i in range(len(class_checkbox.active)):
         del del_list2[class_checkbox.active[i]-i]
     tt = del_list2[-1]
-    del_list2[-1] = str(toclass+ ': color=' + str(color) + ', cell_nums='+ str(count))
+    del_list2[-1] = str(toclass+ ': cell_nums='+ str(count))
     del_list2 = del_list2 + [tt]
     class_checkbox.labels = del_list2
     class_checkbox.active = []
@@ -352,15 +334,14 @@ def del_class():
 def update_clus():
     global adata
     ind = class_checkbox.active[0]
-    adata.obs[adata.obs[cat_opt.value]==str(ind)][cat_opt.value] = np.NAN
+    #adata.obs[adata.obs[cat_opt.value]==str(ind)].loc[cat_opt.value] = pandas.Series(index=[0],dtype=object)[0]
     cl_label = adata.obs[cat_opt.value]
+    cl_label[adata.obs[cat_opt.value]==str(ind)] = np.NAN
+    print(cl_label)
     for i in source.selected.indices:
         cl_label[i] = str(ind)
     adata.obs[cat_opt.value] = cl_label
-    color = adata.uns['category_dict'][cat_opt.value]['color'][ind]
-    class_name = adata.uns['category_dict'][cat_opt.value]['class_name'][ind]
-    cell_num = len(source.selected.indices)
-    class_checkbox.labels[ind] = str(class_name) + ': color=' + str(color) + ', cell_nums=' + str(cell_num)
+    update_checkbox()
     show_color()
     text_color()
 
@@ -369,10 +350,9 @@ def update_clus():
 def rename():
     global class_checkbox, adata
     ind = class_checkbox.active[0]
-    color = adata.uns['category_dict'][cat_opt.value]['color'][ind]
     cell_num = adata.uns['category_dict'][cat_opt.value]['cell_num'][ind]
     labels = class_checkbox.labels
-    labels[ind] = str(input_t.value) + ': color=' + str(color) + ', cell_nums=' + str(cell_num)
+    labels[ind] = str(input_t.value) + ': cell_nums=' + str(cell_num)
     adata.uns['category_dict'][cat_opt.value]['class_name'] = input_t.value
     input_t.value = ''
     print(labels)
@@ -380,46 +360,42 @@ def rename():
     text_color()
 
 
-# Gate checked classes
-def gate_class():
-    global view
-    checked_class = []
-    print('===',class_checkbox.active)
-    for i in class_checkbox.active:
-        checked_class = np.append(checked_class,adata.uns['category_dict'][cat_opt.value][i])
-    print('_____',adata.uns[cat_opt.value][adata.uns[cat_opt.value]['class_name'].isin(list(checked_class))].index)
-    temp = pandas.DataFrame(list(adata.obs[cat_opt]),index=None)
-    view.filters = [IndexFilter(temp[temp.isin(list(checked_class))].index)]
-
 
 # Change color of checkbox
-hide = Div(text='0',visible=False)
+hide = Div(text='0',visible=False,css_classes=['hide'])
+hide1 = Div(text='1',visible=False)
+color_js = [color_list[18]]
+length = 1
 
-def change_js(i,now_color,cat):
-    hide.js_on_change('text',CustomJS(code="""
-        var collection = document.getElementsByClassName('class_checkbox_label');
-        collection[0].children[0].children[ind].style.color = text_color;
-        console.log('collection:' + collection[0].children[0].children[ind].innerHTML);
-    """,args={'text_color':str(now_color),'ind':int(i)}))
-    hide.text = str(hide.text+'1')
-    print('for===',i,now_color)
-    #print(class_checkbox.to_json(True))
+hide1.js_on_change('text',CustomJS(code="""
+    const collection = document.getElementsByClassName("class_checkbox_label");
+    var str = document.getElementsByClassName('hide')[0].children[0].innerHTML;
+    console.log(document.getElementsByClassName('hide')[0].children[0].innerHTML);
+    const color = str.split(' ');
+    var k = color.length;
+    console.log(k,color);
+    for (var i=0;i<k;i++)
+    {
+        collection[0].children[0].children[i].style.color = color[i];
+    }
+    console.log('collection:' + collection[0].children[0].innerHTML);
+    
+"""))
 
-def text_color():    
-    cat = 0
-    if cat_opt.value != '':
-        for i in range(len(adata.uns['category_dict'][cat_opt.value])):
-            now_color = adata.uns['category_dict'][cat_opt.value]['color'][i]
-            if cat_opt.value != 'CD154_TotalA+CD154_TotalA':
-                cat = 1
-            change_js(i,now_color,cat)
-            #hide.text = str(hide.text+'1')
-            #print('for===',i,now_color)
-        change_js(len(adata.uns['category_dict'][cat_opt.value]),color_list[18],cat)
-        print('===',len(adata.uns['category_dict'][cat_opt.value]),color_list[18])
-
-def tex_color(attr,old,new):
-    print('CALL')
+def text_color():
+    global hide
+    color_js = ''
+    try:
+        length = len(adata.uns['category_dict'][cat_opt.value]['color']) 
+        for i in range(length):
+            color_js = color_js + adata.uns['category_dict'][cat_opt.value]['color'][i] + ' '
+        hide.text = color_js + color_list[18]
+    except:
+        length = 1
+        #color_js = [color_list[18]]
+        hide.text = str(color_list[18])
+    hide1.text = hide1.text + '1'
+    print('CALL',color_js)
     
 # Add dots to cluster
 def save_cls_button(event):
@@ -433,19 +409,12 @@ def remove_dot():
     global adata, class_checkbox
     cl_label = adata.obs[cat_opt.value]
     for i in source.selected.indices:
-        cl_label[i] = np.NAN
+        for j in class_checkbox.active:
+            if cl_label[i] == str(j):
+                cl_label[i] = np.NAN
+                break
     adata.obs[cat_opt.value] = cl_label
-    cls_label = []
-    count = 0
-    for ind in range(len(adata.uns['category_dict'][cat_opt.value])):
-        color = adata.uns['category_dict'][cat_opt.value]['color'][ind]
-        class_name = adata.uns['category_dict'][cat_opt.value]['class_name'][ind]
-        cell_num = len(adata.obs[adata.obs[cat_opt.value]==str(ind)])
-        cls_label = np.append(cls_label,str(class_name) + ': color=' + str(color) + ', cell_nums=' + str(cell_num))
-        count = count + cell_num
-    cls_label =  np.append(cls_label,str('no cluster: color=' + str(color_list[18]) + ', cell_nums=' + str(data_df.shape[0]-count)))
-    class_checkbox.labels = list(cls_label)
-    print(cl_label)
+    update_checkbox()
     show_color()
 
 # Show color of category
@@ -467,17 +436,28 @@ def show_color():
 def change_color():
     global adata, class_checkbox, source
     color_l = source.data['color']
-    ind = class_checkbox.active[0]
     show_checked()
     for i in source.selected.indices:
         color_l[i] = cur_color
     source.data['color'] = color_l
-    adata.uns['category_dict'][cat_opt.value]['color'][ind] = cur_color
-    ch_label = list(class_checkbox.labels)
-    ch_label[ind] = str(adata.uns['category_dict'][cat_opt.value]['class_name'][ind]) + ': color=' + str(cur_color) + ', cell_nums=' + str(adata.uns['category_dict'][cat_opt.value]['cell_num'][ind])
-    class_checkbox.labels = ch_label
+    adata.uns['category_dict'][cat_opt.value]['color'][[i for i in class_checkbox.active]] = cur_color
     text_color()
     #print(hide.value,now_color)
+
+
+def update_checkbox():
+    global class_checkbox    
+    cate = cat_opt.value
+    cls_label = []
+    num = 0
+    for i in range(adata.uns['category_dict'][cate].shape[0]):
+        class_name = adata.uns['category_dict'][cate]['class_name'][i]
+        cell_num = len(data_df[adata.obs[cate]==str(i)])       
+        s = str(class_name) +  ': cell_nums=' + str(cell_num)
+        cls_label = np.append(cls_label,s)
+        num = num + cell_num
+    cls_label = np.append(cls_label,str('Unassigned: color=grey, cell_nums=' + str(data_df.shape[0]-num))) 
+    class_checkbox.labels = list(cls_label)
 
 
 
@@ -623,7 +603,7 @@ show_text = Button(label='Show Color on Checkbox')
 show_text.on_click(text_color)
 
 
-class_checkbox.on_change('labels',tex_color)
+#class_checkbox.on_change('labels',tex_color)
 #class_checkbox.js_on_click(CustomJS(code="""
 #    console.log('checkbox_group: active=' + this.active, this.toString())
 #"""))
@@ -715,7 +695,7 @@ except:
 
 ### Layout ###
 file_panel = row(upload_button, export_button)
-figure_panel = column(Figure.p,d_gene,hide)
+figure_panel = column(Figure.p,d_gene,hide,hide1)
 control_panel = column(Figure.s_x, Figure.s_y, log_check, select_color, gate_button, remove_button, showall_button)
 class_panel = column(cat_opt,name,new_view,rename_view,del_view, input_t, create_button, show_text,class_checkbox)
 edit_panel = column(select_cluster,update_cluster, add_dots,remove_dots,rename_button, change_clr_button, merge_button, del_button)
@@ -738,6 +718,8 @@ def show_colorbar():
     #hl_color_bar.color_mapper = hl_bar_map
     #hl_color_bar.color_mapper.update(low = np.amin(source.data[hl_input.value]), high = np.amax(source.data[hl_input.value]))
     hl_color_bar.update(color_mapper=LogColorMapper(palette=cc.kbc[::-1], low=1, high=10))
+    hl_color_bar.color_mapper.low = 1
+    hl_color_bar.color_mapper.high = 10
     print(hl_color_bar.color_mapper.high)
     #hl_gene_plot.p.add_layout(hl_color_bar,'left')
     #new_r = hl_gene_plot.p.circle(Figure.s_x.value, Figure.s_y.value,  source=source, view=view, fill_alpha=1,fill_color=hl_gene_map,line_color=None )
