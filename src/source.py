@@ -1,3 +1,4 @@
+import json
 from bokeh.models import ColumnDataSource, CDSView, IndexFilter, CustomJS, Circle, Div, Panel, Tabs, CheckboxGroup, FileInput,FixedTicker, ColorBar, LogColorMapper
 from bokeh.models.widgets import Select, Button, ColorPicker,TextInput, DataTable, MultiSelect, AutocompleteInput
 from bokeh.events import ButtonClick
@@ -13,6 +14,7 @@ import anndata
 import scipy.sparse as ss
 import colorcet as cc
 import scanpy as sc
+from src.transform import data_trans
 
 
 
@@ -567,6 +569,9 @@ class FlowPlot:
         self.source.data['color'] = col_list
 
 
+
+
+
 class CreateTool:
     def __init__(self,adata):
         self.adata = adata
@@ -584,6 +589,7 @@ class CreateTool:
              Figure.class_name, Figure.new_class, Figure.checkbox_color, Figure.class_checkbox),
             column(Figure.show_selected_class, Figure.add_to, Figure.remove_from, Figure.update_class, 
              Figure.rename_class,  Figure.merge_class, Figure.delete_class))
+    
         return Figure, layout
     
     def highlight_gene(self,main_plot):
@@ -602,6 +608,37 @@ class CreateTool:
             tabs.on_change('active',lambda attr, old, new: plot_list[1].change_view(plot_list[0]))
         return tabs
     
+    def trans_to_json(self, Figure):
+        to_json = data_trans(Figure.adata)
+        to_json = json.dumps(obj=to_json.__dict__,ensure_ascii=False)
+        return to_json
+    
+    def trans_to_class(self, Figure, to_json):
+        rebult_class = json.loads(json)
+
+class class2json():
+    def __init__(self, Figure):
+        self.Figure = Figure
+    
+    def transfer(self):
+        #to_json = data_trans(self.Figure.p.xaxis.axis_label,'01')
+        to_json = data_trans(self.Figure.p.xaxis.axis_label, 
+                             list(self.Figure.source.data['color']), 
+                             self.Figure.color_selection.color,
+                             list(self.Figure.class_checkbox.active),
+                             self.Figure.group.value,
+                             list(self.Figure.source.selected.indices),
+                             list(self.Figure.view.filters[0].indices))
+        to_json = json.dumps(obj=to_json.__dict__,ensure_ascii=False)
+        return to_json
+
+    def dict2data(d):
+
+        return data_trans(d['data_color'])
+
+    def renew_data(self,Figure,d):
+        Figure.source.data['color'] = list(d['data_color'])
+        Figure.view.filters = [IndexFilter(d['showing_indices'])]
 
 
 class connect_figure():
